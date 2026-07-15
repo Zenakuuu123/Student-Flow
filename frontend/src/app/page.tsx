@@ -3,6 +3,7 @@
 import { useAuth } from '@/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { SplashLoader } from '@/components/ui/SplashLoader';
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -18,12 +19,5 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
-  return (
-    <div className="flex items-center justify-center h-screen bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
-        <p className="text-sm text-muted-foreground">Loading StudyFlow...</p>
-      </div>
-    </div>
-  );
+  return <SplashLoader message="Getting things ready" loading={loading} />;
 }

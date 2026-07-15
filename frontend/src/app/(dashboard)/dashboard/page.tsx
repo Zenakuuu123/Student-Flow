@@ -5,6 +5,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { taskService } from '@/services/task.service';
 import { pomodoroService } from '@/services/pomodoro.service';
 import type { Task } from '@/types';
+import { parseDescriptionAndRange, formatDueDateRange } from '@/lib/utils';
 import { PRIORITY_COLORS, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS, STATUS_COLORS } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -403,7 +404,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-1.5 ml-3">
                       <Clock className={`w-3.5 h-3.5 ${getDueDateColor(task.due_date!)}`} />
                       <span className={`text-xs font-medium ${getDueDateColor(task.due_date!)}`}>
-                        {formatDueDate(task.due_date!)}
+                        {formatDueDateRange(task.due_date, task.description)}
                       </span>
                     </div>
                   </div>
@@ -553,18 +554,21 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {selectedTask.description && parseDescriptionAndRange(selectedTask.description).cleanDescription && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <p className="text-sm text-foreground/90 mt-0.5 bg-navy-800/10 p-2.5 rounded-lg border border-border/10 whitespace-pre-wrap">
+                    {parseDescriptionAndRange(selectedTask.description).cleanDescription}
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs text-muted-foreground">Due Date</Label>
+                  <Label className="text-xs text-muted-foreground">Due Date / Duration</Label>
                   <p className="text-sm font-medium mt-1 text-foreground flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                    {selectedTask.due_date
-                      ? new Date(selectedTask.due_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })
-                      : 'No due date'}
+                    {formatDueDateRange(selectedTask.due_date, selectedTask.description)}
                   </p>
                 </div>
                 <div>

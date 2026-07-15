@@ -4,12 +4,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { taskService } from '@/services/task.service';
 import { courseService } from '@/services/course.service';
 import type { Task, Course, TaskStatus, TaskPriority } from '@/types';
+import { parseDescriptionAndRange, formatDescriptionWithRange, formatDueDateRange, parseCourseName } from '@/lib/utils';
 import {
   TASK_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
   PRIORITY_COLORS,
   STATUS_COLORS,
 } from '@/types';
+import { CourseIcon } from '@/components/ui/course-icon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,6 +61,7 @@ export default function TasksPage() {
     description: '',
     status: 'todo' as TaskStatus,
     priority: 'medium' as TaskPriority,
+    start_date: '',
     due_date: '',
     course_id: '',
   });
@@ -90,18 +93,20 @@ export default function TasksPage() {
 
   const openCreate = () => {
     setEditingTask(null);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', course_id: '' });
+    setForm({ title: '', description: '', status: 'todo', priority: 'medium', start_date: '', due_date: '', course_id: '' });
     setDialogOpen(true);
   };
 
   const openEdit = (task: Task) => {
     setEditingTask(task);
+    const { cleanDescription, range } = parseDescriptionAndRange(task.description);
     const courseExists = courses.some((c) => c.id === task.course_id);
     setForm({
       title: task.title,
-      description: task.description || '',
+      description: cleanDescription,
       status: task.status,
       priority: task.priority,
+      start_date: range ? range.start : '',
       due_date: task.due_date ? task.due_date.split('T')[0] : '',
       course_id: courseExists ? (task.course_id || '') : '',
     });
@@ -115,9 +120,14 @@ export default function TasksPage() {
     }
     setSaving(true);
     try {
+      const finalDescription = formatDescriptionWithRange(
+        form.description,
+        form.start_date && form.due_date ? { start: form.start_date, end: form.due_date } : null
+      );
+
       const payload = {
         title: form.title,
-        description: form.description || null,
+        description: finalDescription || null,
         status: form.status,
         priority: form.priority,
         due_date: form.due_date || null,
@@ -144,8 +154,8 @@ export default function TasksPage() {
   const handleDelete = async (id: string) => {
     try {
       await taskService.delete(id);
-      setTasks((prev) => prev.filter((t) => t.id !== id));
       toast.success('Task deleted');
+      loadData();
     } catch (err) {
       console.error(err);
       toast.error('Failed to delete task');
@@ -162,12 +172,11 @@ export default function TasksPage() {
     }
   };
 
-  const formatDueDate = (d: string) => {
-    const date = new Date(d);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatTaskDate = (task: Task) => {
+    return formatDueDateRange(task.due_date, task.description);
   };
 
-  const isOverdue = (d: string) => new Date(d) < new Date() ;
+  const isOverdue = (d: string) => new Date(d) < new Date();
 
   if (loading) {
     return (
@@ -289,7 +298,9 @@ export default function TasksPage() {
                       {task.title}
                     </p>
                     {task.description && (
-                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{task.description}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
+                        {parseDescriptionAndRange(task.description).cleanDescription}
+                      </p>
                     )}
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <Badge variant="outline" className={`text-xs ${STATUS_COLORS[task.status]}`}>
@@ -300,23 +311,23 @@ export default function TasksPage() {
                       </Badge>
                       {task.course && (
                         <span
-                          className="text-xs px-1.5 py-0.5 rounded"
+                          className="text-xs px-1.5 py-0.5 rounded inline-flex items-center gap-1"
                           style={{ backgroundColor: `${task.course.color}20`, color: task.course.color }}
                         >
-                          {task.course.icon} {task.course.name}
+                          <CourseIcon icon={task.course.icon} className="w-3.5 h-3.5" /> {parseCourseName(task.course.name)}
                         </span>
                       )}
                       {task.due_date && (
                         <span className={`text-xs flex items-center gap-1 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-red-400' : 'text-muted-foreground'}`}>
                           <Clock className="w-3 h-3" />
-                          {formatDueDate(task.due_date)}
+                          {formatTaskDate(task)}
                         </span>
                       )}
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(task)}>
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
@@ -386,34 +397,52 @@ export default function TasksPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Due Date</Label>
+                <Label>Start Date (From)</Label>
+                <Input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Due Date (To)</Label>
                 <Input
                   type="date"
                   value={form.due_date}
                   onChange={(e) => setForm({ ...form, due_date: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Course</Label>
-                <Select value={form.course_id || 'none'} onValueChange={(v) => setForm({ ...form, course_id: !v || v === 'none' ? '' : v })}>
-                  <SelectTrigger>
-                    {form.course_id ? (
-                      (() => {
-                        const course = courses.find((c) => c.id === form.course_id);
-                        return course ? `${course.icon} ${course.name}` : 'None';
-                      })()
-                    ) : (
-                      <SelectValue placeholder="None" />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Course</SelectItem>
-                    {courses.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Course</Label>
+              <Select value={form.course_id || 'none'} onValueChange={(v) => setForm({ ...form, course_id: !v || v === 'none' ? '' : v })}>
+                <SelectTrigger className="flex items-center gap-1.5">
+                  {form.course_id ? (
+                    (() => {
+                      const course = courses.find((c) => c.id === form.course_id);
+                      return course ? (
+                        <span className="flex items-center gap-1.5">
+                          <CourseIcon icon={course.icon} className="w-4 h-4" />
+                          <span>{parseCourseName(course.name)}</span>
+                        </span>
+                      ) : 'None';
+                    })()
+                  ) : (
+                    <SelectValue placeholder="None" />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Course</SelectItem>
+                  {courses.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="flex items-center gap-1.5">
+                        <CourseIcon icon={c.icon} className="w-4 h-4" />
+                        <span>{parseCourseName(c.name)}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

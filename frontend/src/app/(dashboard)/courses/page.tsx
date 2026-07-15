@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { courseService } from '@/services/course.service';
+import { parseCourseName, parseCourseProfessor } from '@/lib/utils';
+import { CourseIcon } from '@/components/ui/course-icon';
 import { taskService } from '@/services/task.service';
 import { noteService } from '@/services/note.service';
 import { expenseService } from '@/services/expense.service';
@@ -52,6 +54,7 @@ export default function CoursesPage() {
 
   const [form, setForm] = useState({
     name: '',
+    professors: [''],
     color: '#2563eb',
     icon: '📚',
   });
@@ -89,13 +92,19 @@ export default function CoursesPage() {
 
   const openCreate = () => {
     setEditingCourse(null);
-    setForm({ name: '', color: '#2563eb', icon: '📚' });
+    setForm({ name: '', professors: [''], color: '#2563eb', icon: '📚' });
     setDialogOpen(true);
   };
 
   const openEdit = (course: Course) => {
     setEditingCourse(course);
-    setForm({ name: course.name, color: course.color, icon: course.icon });
+    const profString = parseCourseProfessor(course.name);
+    setForm({
+      name: parseCourseName(course.name),
+      professors: profString ? profString.split(',').map((p) => p.trim()) : [''],
+      color: course.color,
+      icon: course.icon,
+    });
     setDialogOpen(true);
   };
 
@@ -106,11 +115,22 @@ export default function CoursesPage() {
     }
     setSaving(true);
     try {
+      const filteredProfs = form.professors.map((p) => p.trim()).filter(Boolean);
+      const finalName = filteredProfs.length > 0
+        ? `${form.name.trim()} [professor:${filteredProfs.join(', ')}]`
+        : form.name.trim();
+
+      const payload = {
+        name: finalName,
+        color: form.color,
+        icon: form.icon,
+      };
+
       if (editingCourse) {
-        await courseService.update(editingCourse.id, form);
+        await courseService.update(editingCourse.id, payload);
         toast.success('Course updated');
       } else {
-        await courseService.create(form);
+        await courseService.create(payload);
         toast.success('Course created');
       }
       setDialogOpen(false);
@@ -188,20 +208,29 @@ export default function CoursesPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                        className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl overflow-hidden shrink-0"
                         style={{ backgroundColor: `${course.color}15` }}
                       >
-                        {course.icon}
+                        <CourseIcon icon={course.icon} className="w-8 h-8" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg">{course.name}</h3>
+                        <h3 className="font-semibold text-lg">{parseCourseName(course.name)}</h3>
+                        {parseCourseProfessor(course.name) && (
+                          <div className="space-y-0.5 mt-0.5">
+                            {parseCourseProfessor(course.name).split(',').map((p, idx) => (
+                              <p key={idx} className="text-xs text-muted-foreground flex items-center gap-1">
+                                <span>👨‍🏫</span> <span className="truncate">{p.trim()}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
                         <div
-                          className="w-3 h-3 rounded-full mt-1"
+                          className="w-3 h-3 rounded-full mt-2"
                           style={{ backgroundColor: course.color }}
                         />
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(course)}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
@@ -256,6 +285,51 @@ export default function CoursesPage() {
                 placeholder="e.g. Mathematics, Computer Science..."
               />
             </div>
+            <div className="space-y-2">
+              <Label>Professor(s) (Optional)</Label>
+              <div className="space-y-2">
+                {form.professors.map((prof, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <Input
+                      value={prof}
+                      onChange={(e) => {
+                        const updated = [...form.professors];
+                        updated[index] = e.target.value;
+                        setForm({ ...form, professors: updated });
+                      }}
+                      placeholder="e.g. Dr. Jane Smith..."
+                      className="flex-1"
+                    />
+                    {index > 0 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive hover:bg-destructive/10 shrink-0"
+                        onClick={() => {
+                          const updated = form.professors.filter((_, i) => i !== index);
+                          setForm({ ...form, professors: updated });
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        onClick={() => {
+                          setForm({ ...form, professors: [...form.professors, ''] });
+                        }}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Icon Picker */}
             <div className="space-y-2">
@@ -266,7 +340,7 @@ export default function CoursesPage() {
                     key={icon}
                     onClick={() => setForm({ ...form, icon })}
                     className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all ${
-                      form.icon === icon
+                      form.icon === icon && !form.icon.startsWith('data:image/')
                         ? 'bg-primary/20 ring-2 ring-primary scale-110'
                         : 'bg-muted/50 hover:bg-accent'
                     }`}
@@ -274,6 +348,39 @@ export default function CoursesPage() {
                     {icon}
                   </button>
                 ))}
+              </div>
+              
+              <div className="space-y-1.5 mt-3 pt-2 border-t border-border/20">
+                <Label className="text-xs">Or upload a custom picture icon:</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          const base64String = reader.result as string;
+                          setForm({ ...form, icon: base64String });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="flex-1 text-xs cursor-pointer"
+                  />
+                  {form.icon.startsWith('data:image/') && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setForm({ ...form, icon: '📚' })}
+                      className="text-xs text-destructive hover:bg-destructive/10"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -299,13 +406,20 @@ export default function CoursesPage() {
               <Label className="text-xs text-muted-foreground mb-2 block">Preview</Label>
               <div className="flex items-center gap-3">
                 <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-xl overflow-hidden shrink-0"
                   style={{ backgroundColor: `${form.color}15` }}
                 >
-                  {form.icon}
+                  <CourseIcon icon={form.icon} className="w-6 h-6" />
                 </div>
-                <span className="font-semibold">{form.name || 'Course Name'}</span>
-                <div className="w-3 h-3 rounded-full ml-auto" style={{ backgroundColor: form.color }} />
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold truncate">{form.name || 'Course Name'}</span>
+                  {form.professors.filter(Boolean).length > 0 && (
+                    <span className="text-xs text-muted-foreground truncate">
+                      Prof: {form.professors.filter(Boolean).join(', ')}
+                    </span>
+                  )}
+                </div>
+                <div className="w-3 h-3 rounded-full ml-auto shrink-0" style={{ backgroundColor: form.color }} />
               </div>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { noteService } from '@/services/note.service';
 import { courseService } from '@/services/course.service';
 import type { Note, Course } from '@/types';
+import { parseCourseName } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -153,9 +154,9 @@ export default function NotesPage() {
         <p className="text-sm text-muted-foreground mt-1">{notes.length} note{notes.length !== 1 ? 's' : ''}</p>
       </div>
 
-      <div className="flex gap-4 h-[calc(100vh-14rem)]">
+      <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-14rem)] md:h-[calc(100vh-14rem)]">
         {/* Notes List Sidebar */}
-        <Card className="w-72 shrink-0 bg-card/50 border-border/50 flex flex-col">
+        <Card className="w-full md:w-72 shrink-0 h-48 md:h-full bg-card/50 border-border/50 flex flex-col">
           <div className="p-3 space-y-2 border-b border-border/50">
             <Button onClick={createNote} className="w-full gap-2" size="sm">
               <Plus className="w-4 h-4" />
@@ -175,7 +176,7 @@ export default function NotesPage() {
                 {filterCourse && filterCourse !== 'all' ? (
                   (() => {
                     const course = courses.find((c) => c.id === filterCourse);
-                    return course ? `${course.icon} ${course.name}` : 'All Courses';
+                    return course ? `${course.icon} ${parseCourseName(course.name)}` : 'All Courses';
                   })()
                 ) : (
                   <SelectValue placeholder="All Courses" />
@@ -184,7 +185,7 @@ export default function NotesPage() {
               <SelectContent>
                 <SelectItem value="all">All Courses</SelectItem>
                 {courses.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{c.icon} {parseCourseName(c.name)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -224,7 +225,7 @@ export default function NotesPage() {
                       e.stopPropagation();
                       deleteNote(note.id);
                     }}
-                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute right-2 top-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </button>

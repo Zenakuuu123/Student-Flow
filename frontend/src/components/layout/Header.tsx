@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Sun, Moon, LogOut, User } from 'lucide-react';
+import { Sun, Moon, LogOut, User, Menu } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AnimatedLandscape } from '@/components/layout/AnimatedLandscape';
 import {
@@ -25,7 +25,11 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const { profile, signOut, updateProfile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -68,9 +72,17 @@ export function Header() {
     : 'SF';
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 md:px-6 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="lg:hidden mr-2 shrink-0"
+        onClick={onMenuClick}
+      >
+        <Menu className="w-5 h-5" />
+      </Button>
       {/* Animated Parallax Landscape */}
-      <div className="flex-1 mr-6 h-11 relative max-w-md md:max-w-2xl lg:max-w-4xl">
+      <div className="flex-1 mr-4 md:mr-6 h-11 relative max-w-md md:max-w-2xl lg:max-w-4xl min-w-0">
         <AnimatedLandscape />
       </div>
 

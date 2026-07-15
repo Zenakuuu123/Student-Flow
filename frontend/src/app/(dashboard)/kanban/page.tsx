@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { taskService } from '@/services/task.service';
 import { courseService } from '@/services/course.service';
 import type { Task, Course, TaskStatus, TaskPriority } from '@/types';
+import { formatDueDateRange } from '@/lib/utils';
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, PRIORITY_COLORS } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -258,7 +259,7 @@ export default function KanbanPage() {
                             {task.due_date && (
                               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                                 <Clock className="w-2.5 h-2.5" />
-                                {formatDueDate(task.due_date)}
+                                {formatDueDateRange(task.due_date, task.description)}
                               </span>
                             )}
                           </div>

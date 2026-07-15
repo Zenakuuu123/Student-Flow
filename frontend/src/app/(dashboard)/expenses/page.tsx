@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { expenseService } from '@/services/expense.service';
 import { courseService } from '@/services/course.service';
+import { parseCourseName } from '@/lib/utils';
+import { CourseIcon } from '@/components/ui/course-icon';
 import type { Expense, Course, ExpenseCategory } from '@/types';
 import { EXPENSE_CATEGORIES, CATEGORY_COLORS } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,13 +45,33 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const DEFAULT_CATEGORIES = [
+  { value: 'textbooks', label: 'Textbooks', icon: '📚', color: '#2563eb' },
+  { value: 'supplies', label: 'Supplies', icon: '✏️', color: '#7c3aed' },
+  { value: 'software', label: 'Software', icon: '💻', color: '#059669' },
+  { value: 'food', label: 'Food', icon: '🍔', color: '#d97706' },
+  { value: 'transport', label: 'Transport', icon: '🚌', color: '#dc2626' },
+  { value: 'other', label: 'Other', icon: '📦', color: '#6b7280' },
+];
+
+const CATEGORY_ICONS = ['📚', '✏️', '💻', '🍔', '🚌', '🏠', '🎁', '🩺', '🎬', '☕', '👗', '🔌', '📦', '💸', '🎫', '🛒', '🔑', '💡'];
+
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [customCategories, setCustomCategories] = useState<{ value: string; label: string; icon: string; color: string }[]>([]);
+  const [disabledCategories, setDisabledCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [categoriesDialogOpen, setCategoriesDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [saving, setSaving] = useState(false);
+  
+  // Custom category form state
+  const [newCatLabel, setNewCatLabel] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('📦');
+  const [newCatColor, setNewCatColor] = useState('#3b82f6');
+
   const [budget, setBudget] = useState(() => {
     if (typeof window !== 'undefined') {
       return Number(localStorage.getItem('studyflow-budget') || '500');
@@ -60,10 +82,73 @@ export default function ExpensesPage() {
   const [form, setForm] = useState({
     description: '',
     amount: '',
-    category: 'other' as ExpenseCategory,
+    category: 'other' as string,
     date: new Date().toISOString().split('T')[0],
     course_id: '',
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('studyflow-custom-categories');
+      if (stored) {
+        try {
+          setCustomCategories(JSON.parse(stored));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      const storedDisabled = localStorage.getItem('studyflow-disabled-categories');
+      if (storedDisabled) {
+        try {
+          setDisabledCategories(JSON.parse(storedDisabled));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, []);
+
+  const allCategories = [
+    ...DEFAULT_CATEGORIES,
+    ...customCategories,
+  ].filter((cat) => !disabledCategories.includes(cat.value));
+
+  const toggleCategoryDisabled = (val: string) => {
+    let updated: string[];
+    if (disabledCategories.includes(val)) {
+      updated = disabledCategories.filter((x) => x !== val);
+      toast.success('Category enabled');
+    } else {
+      updated = [...disabledCategories, val];
+      toast.success('Category disabled');
+    }
+    setDisabledCategories(updated);
+    localStorage.setItem('studyflow-disabled-categories', JSON.stringify(updated));
+  };
+
+  const addCustomCategory = () => {
+    if (!newCatLabel.trim()) {
+      toast.error('Category name is required');
+      return;
+    }
+    const val = newCatLabel.trim().toLowerCase().replace(/\s+/g, '-');
+    if (allCategories.some((c) => c.value === val)) {
+      toast.error('Category already exists');
+      return;
+    }
+    const updated = [...customCategories, { value: val, label: newCatLabel.trim(), icon: newCatIcon, color: newCatColor }];
+    setCustomCategories(updated);
+    localStorage.setItem('studyflow-custom-categories', JSON.stringify(updated));
+    setNewCatLabel('');
+    toast.success('Category added');
+  };
+
+  const deleteCustomCategory = (val: string) => {
+    const updated = customCategories.filter((c) => c.value !== val);
+    setCustomCategories(updated);
+    localStorage.setItem('studyflow-custom-categories', JSON.stringify(updated));
+    toast.success('Category deleted');
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -181,7 +266,7 @@ export default function ExpensesPage() {
   };
 
   const getCategoryInfo = (cat: string) =>
-    EXPENSE_CATEGORIES.find((c) => c.value === cat) || { label: cat, icon: '📦' };
+    allCategories.find((c) => c.value === cat) || { label: cat, icon: '📦', color: '#6b7280' };
 
   if (loading) {
     return (
@@ -207,6 +292,9 @@ export default function ExpensesPage() {
           <p className="text-sm text-muted-foreground mt-1">Track your student spending</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setCategoriesDialogOpen(true)} className="gap-2">
+            <span>⚙️ Categories</span>
+          </Button>
           <Button variant="outline" onClick={exportCSV} className="gap-2">
             <Download className="w-4 h-4" />
             Export CSV
@@ -263,14 +351,14 @@ export default function ExpensesPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {EXPENSE_CATEGORIES.map((cat) => {
+              {allCategories.map((cat) => {
                 const amount = categoryTotals[cat.value] || 0;
                 const percent = totalSpent > 0 ? (amount / totalSpent) * 100 : 0;
                 return (
                   <div key={cat.value} className="flex items-center gap-2.5 p-2 rounded-lg bg-background/30">
                     <div
                       className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: CATEGORY_COLORS[cat.value] }}
+                      style={{ backgroundColor: cat.color }}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{cat.icon} {cat.label}</p>
@@ -325,11 +413,16 @@ export default function ExpensesPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {expense.course ? `${expense.course.icon} ${expense.course.name}` : '—'}
+                        {expense.course ? (
+                          <span className="inline-flex items-center gap-1">
+                            <CourseIcon icon={expense.course.icon} className="w-3.5 h-3.5" />
+                            <span>{parseCourseName(expense.course.name)}</span>
+                          </span>
+                        ) : '—'}
                       </TableCell>
                       <TableCell className="text-right font-semibold">₱{Number(expense.amount).toFixed(2)}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(expense)}>
                             <Pencil className="w-3 h-3" />
                           </Button>
@@ -371,10 +464,15 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v as ExpenseCategory })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v })}>
+                  <SelectTrigger>
+                    {(() => {
+                      const cat = allCategories.find((c) => c.value === form.category);
+                      return cat ? `${cat.icon} ${cat.label}` : 'Select Category';
+                    })()}
+                  </SelectTrigger>
                   <SelectContent>
-                    {EXPENSE_CATEGORIES.map((c) => (
+                    {allCategories.map((c) => (
                       <SelectItem key={c.value} value={c.value}>{c.icon} {c.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -383,11 +481,16 @@ export default function ExpensesPage() {
               <div className="space-y-2">
                 <Label>Course</Label>
                 <Select value={form.course_id || 'none'} onValueChange={(v) => setForm({ ...form, course_id: !v || v === 'none' ? '' : v })}>
-                  <SelectTrigger>
+                  <SelectTrigger className="flex items-center gap-1.5">
                     {form.course_id ? (
                       (() => {
                         const course = courses.find((c) => c.id === form.course_id);
-                        return course ? `${course.icon} ${course.name}` : 'None';
+                        return course ? (
+                          <span className="flex items-center gap-1.5">
+                            <CourseIcon icon={course.icon} className="w-4 h-4" />
+                            <span>{parseCourseName(course.name)}</span>
+                          </span>
+                        ) : 'None';
                       })()
                     ) : (
                       <SelectValue placeholder="None" />
@@ -396,7 +499,12 @@ export default function ExpensesPage() {
                   <SelectContent>
                     <SelectItem value="none">No Course</SelectItem>
                     {courses.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="flex items-center gap-1.5">
+                          <CourseIcon icon={c.icon} className="w-4 h-4" />
+                          <span>{parseCourseName(c.name)}</span>
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -409,6 +517,118 @@ export default function ExpensesPage() {
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {editingExpense ? 'Save Changes' : 'Add Expense'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Categories Dialog */}
+      <Dialog open={categoriesDialogOpen} onOpenChange={setCategoriesDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Manage Categories</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Add Custom Category Form */}
+            <div className="p-3.5 rounded-xl border border-border/50 bg-background/50 space-y-3">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Add Custom Category</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={newCatLabel}
+                  onChange={(e) => setNewCatLabel(e.target.value)}
+                  placeholder="e.g. Rent, Subscriptions..."
+                  className="flex-1"
+                />
+                <Input
+                  type="color"
+                  value={newCatColor}
+                  onChange={(e) => setNewCatColor(e.target.value)}
+                  className="w-12 h-10 p-1 cursor-pointer rounded-lg bg-navy-950 border border-border/40 shrink-0"
+                />
+              </div>
+
+              {/* Icon selection */}
+              <div className="space-y-1">
+                <Label className="text-xs">Select Icon</Label>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-navy-950/20 border border-border/20 rounded-lg">
+                  {CATEGORY_ICONS.map((icon) => (
+                    <button
+                      key={icon}
+                      onClick={() => setNewCatIcon(icon)}
+                      className={`w-8 h-8 rounded flex items-center justify-center text-lg hover:bg-accent transition-colors ${
+                        newCatIcon === icon ? 'bg-primary/20 ring-1 ring-primary' : ''
+                      }`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Button onClick={addCustomCategory} className="w-full gap-1.5 h-9 mt-1" size="sm">
+                <Plus className="w-4 h-4" />
+                Add Category
+              </Button>
+            </div>
+
+            {/* List of default Categories */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Default Categories</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                {DEFAULT_CATEGORIES.map((cat) => {
+                  const isDisabled = disabledCategories.includes(cat.value);
+                  return (
+                    <div key={cat.value} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                      isDisabled ? 'bg-background/10 border-border/20 opacity-50' : 'bg-background/30 border-border/10'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                        <span className={`text-xs font-medium ${isDisabled ? 'line-through text-muted-foreground' : ''}`}>{cat.icon} {cat.label}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-6 px-2 text-[10px] font-bold ${
+                          isDisabled ? 'text-primary hover:bg-primary/10' : 'text-destructive hover:bg-destructive/10'
+                        }`}
+                        onClick={() => toggleCategoryDisabled(cat.value)}
+                      >
+                        {isDisabled ? 'Show' : 'Hide'}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* List of custom Categories */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Custom Categories</Label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {customCategories.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-3 text-center bg-background/20 rounded-lg border border-dashed border-border/30">No custom categories added yet</p>
+                ) : (
+                  customCategories.map((cat) => (
+                    <div key={cat.value} className="flex items-center justify-between p-2 rounded-lg bg-background/30 border border-border/10">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                        <span className="text-sm font-medium">{cat.icon} {cat.label}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                        onClick={() => deleteCustomCategory(cat.value)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCategoriesDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

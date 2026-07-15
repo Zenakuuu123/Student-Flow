@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { SplashLoader } from '@/components/ui/SplashLoader';
 
 export default function SignupPage() {
   const { signUp } = useAuth();
@@ -18,6 +19,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
 
   const passwordStrength = useMemo(() => {
     if (!password) return { level: 0, label: '', color: '' };
@@ -53,9 +55,15 @@ export default function SignupPage() {
     const result = await signUp(email, password, name, school);
     if (result.error) {
       setError(result.error);
+      setLoading(false);
+    } else {
+      setShowSplash(true);
     }
-    setLoading(false);
   };
+
+  if (showSplash) {
+    return <SplashLoader message="Setting up your account" loading={true} />;
+  }
 
   return (
     <div className="animate-fade-in-scale">

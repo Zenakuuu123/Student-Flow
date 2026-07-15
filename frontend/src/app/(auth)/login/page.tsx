@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Mail, Lock, Loader2 } from 'lucide-react';
+import { SplashLoader } from '@/components/ui/SplashLoader';
 
 export default function LoginPage() {
   const { signIn } = useAuth();
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,9 +26,17 @@ export default function LoginPage() {
     const result = await signIn(email, password);
     if (result.error) {
       setError(result.error);
+      setLoading(false);
+    } else {
+      // Auth succeeded — show the splash screen while navigating
+      setShowSplash(true);
     }
-    setLoading(false);
   };
+
+  // Show splash overlay after successful login
+  if (showSplash) {
+    return <SplashLoader message="Signing you in" loading={true} />;
+  }
 
   return (
     <div className="animate-fade-in-scale">
